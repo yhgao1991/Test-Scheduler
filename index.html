@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Test Date Scheduler</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Lato:wght@300;400;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0b0e14; --surface: #111520; --surface2: #181d2b; --surface3: #1e2436;
+      --border: #1f2740; --border-light: #2a3354;
+      --accent: #4f7cff; --accent2: #00d4aa; --accent3: #ff6b6b; --accent4: #f5a623;
+      --accent-glow: rgba(79,124,255,0.18); --cal: #34a853;
+      --text: #e8ecf5; --text-muted: #6b7699; --text-dim: #3d4a6b;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { min-height: 100vh; background: var(--bg); color: var(--text); font-family: 'Lato', sans-serif; font-weight: 300; overflow-x: hidden; }
+    body::before { content: ''; position: fixed; inset: 0; background-image: linear-gradient(rgba(79,124,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(79,124,255,0.03) 1px, transparent 1px); background-size: 48px 48px; pointer-events: none; z-index: 0; }
+    .layout { position: relative; z-index: 1; display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+
+    /* ── SIDEBAR ── */
+    .sidebar { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+    .sidebar-header { padding: 24px 20px 16px; border-bottom: 1px solid var(--border); }
+    .sidebar-eyebrow { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--accent); margin-bottom: 5px; }
+    .sidebar-title { font-family: 'DM Serif Display', serif; font-size: 19px; font-weight: 400; color: var(--text); }
+    .sidebar-title em { font-style: italic; color: var(--accent); }
+    .sync-indicator { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text-dim); }
+    .sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); flex-shrink: 0; transition: background 0.3s; }
+    .sync-dot.connected { background: var(--accent2); box-shadow: 0 0 6px rgba(0,212,170,0.5); }
+    .sync-dot.connecting { background: var(--accent4); animation: pulse 1s infinite; }
+    .sync-dot.error { background: var(--accent3); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .section-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--text-dim); padding: 16px 20px 8px; }
+    .project-list { padding: 0 10px; }
+    .project-item { display: flex; align-items: center; justify-content: space-between; padding: 9px 10px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; margin-bottom: 3px; gap: 8px; transition: background 0.15s; }
+    .project-item:hover { background: var(--surface2); }
+    .project-item.active { background: var(--surface3); border-color: var(--border-light); }
+    .project-item-left { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    .project-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .project-name-text { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .project-item.active .project-name-text { font-weight: 700; }
+    .project-progress { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text-dim); flex-shrink: 0; }
+    .project-delete { background: none; border: none; cursor: pointer; color: var(--text-dim); font-size: 15px; padding: 2px 5px; border-radius: 3px; opacity: 0; transition: opacity 0.15s, color 0.15s; flex-shrink: 0; }
+    .project-item:hover .project-delete { opacity: 1; }
+    .project-delete:hover { color: var(--accent3) !important; }
+    .sidebar-divider { height: 1px; background: var(--border); margin: 8px 0; }
+    .sidebar-btn { margin: 5px 10px; padding: 9px 12px; background: none; border: 1px dashed var(--border-light); border-radius: 6px; color: var(--text-muted); font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.15s; width: calc(100% - 20px); }
+    .sidebar-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+    .sidebar-btn.holiday-btn:hover { border-color: var(--accent4); color: var(--accent4); background: rgba(245,166,35,0.08); }
+    .sidebar-btn.cal-btn:hover { border-color: var(--cal); color: var(--cal); background: rgba(52,168,83,0.08); }
+
+    /* ── MAIN ── */
+    .main { display: flex; flex-direction: column; padding: 44px 44px 80px; min-width: 0; }
+    .welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 10px; }
+    .welcome-icon { font-size: 36px; opacity: 0.15; margin-bottom: 4px; }
+    .welcome-title { font-family: 'DM Serif Display', serif; font-size: 22px; font-weight: 400; color: var(--text-muted); }
+    .welcome-sub { font-size: 13px; color: var(--text-dim); }
+    .loading-screen { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+    .spinner { width: 32px; height: 32px; border: 2px solid var(--border-light); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); letter-spacing: 0.1em; }
+
+    /* ── PANEL / FORMS ── */
+    .panel { max-width: 600px; width: 100%; }
+    .panel-title { font-family: 'DM Serif Display', serif; font-size: 26px; font-weight: 400; color: var(--text); margin-bottom: 8px; letter-spacing: -0.01em; }
+    .panel-title em { font-style: italic; color: var(--accent); }
+    .panel-sub { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 24px; }
+    .form-group { margin-bottom: 18px; }
+    .form-label { display: block; font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 7px; }
+    .form-input { width: 100%; padding: 11px 13px; font-family: 'Lato', sans-serif; font-size: 14px; color: var(--text); background: var(--surface); border: 1.5px solid var(--border-light); border-radius: 6px; outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
+    .form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    input[type="date"].form-input, input[type="number"].form-input, input[type="time"].form-input { font-family: 'DM Mono', monospace; color-scheme: dark; }
+    select.form-input { cursor: pointer; color-scheme: dark; }
+    .form-row { display: flex; gap: 10px; }
+    .form-row .form-group { flex: 1; margin-bottom: 0; }
+    .form-submit { width: 100%; padding: 13px; background: var(--accent); border: none; border-radius: 6px; color: white; font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; cursor: pointer; transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s; margin-top: 8px; }
+    .form-submit:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(79,124,255,0.35); }
+    .form-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* ── INTERVAL CHIPS ── */
+    .interval-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; min-height: 36px; align-items: flex-start; }
+    .interval-chip { display: inline-flex; align-items: center; gap: 6px; background: rgba(167,139,250,0.08); border: 1px solid rgba(167,139,250,0.3); border-radius: 20px; padding: 4px 11px; font-family: 'DM Mono', monospace; font-size: 11px; color: #a78bfa; }
+    .chip-del { background: none; border: none; cursor: pointer; color: rgba(167,139,250,0.4); font-size: 13px; line-height: 1; padding: 0 2px; transition: color 0.15s; }
+    .chip-del:hover { color: var(--accent3); }
+    .intervals-section { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; margin-bottom: 18px; }
+    .intervals-section-title { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+    .use-default-link { font-size: 10px; color: var(--accent); cursor: pointer; text-decoration: underline; letter-spacing: 0; text-transform: none; }
+    .interval-add-row { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+    .interval-add-row input[type="number"] { width: 90px; flex: none; padding: 9px 11px; font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text); background: var(--surface); border: 1.5px solid var(--border-light); border-radius: 6px; outline: none; color-scheme: dark; transition: border-color 0.2s; }
+    .interval-add-row input[type="number"]:focus { border-color: #a78bfa; }
+    .interval-add-row select { padding: 9px 11px; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text); background: var(--surface); border: 1.5px solid var(--border-light); border-radius: 6px; outline: none; color-scheme: dark; cursor: pointer; transition: border-color 0.2s; }
+    .interval-add-row select:focus { border-color: #a78bfa; }
+    .interval-add-row input[type="text"] { flex: 1; min-width: 100px; padding: 9px 11px; font-family: 'Lato', sans-serif; font-size: 13px; color: var(--text); background: var(--surface); border: 1.5px solid var(--border-light); border-radius: 6px; outline: none; transition: border-color 0.2s; }
+    .interval-add-row input[type="text"]:focus { border-color: #a78bfa; }
+    .small-add-btn { padding: 9px 13px; background: var(--surface3); border: 1px solid var(--border-light); border-radius: 6px; color: #a78bfa; font-family: 'DM Mono', monospace; font-size: 11px; cursor: pointer; transition: background 0.15s; white-space: nowrap; flex-shrink: 0; }
+    .small-add-btn:hover { background: rgba(167,139,250,0.1); }
+    .add-btn { padding: 10px 15px; background: var(--surface3); border: 1px solid var(--border-light); border-radius: 6px; color: var(--accent); font-family: 'DM Mono', monospace; font-size: 11px; cursor: pointer; transition: background 0.15s; white-space: nowrap; }
+    .add-btn:hover { background: var(--accent-glow); }
+    .empty-list { font-size: 12px; color: var(--text-dim); font-style: italic; padding: 6px 0; }
+
+    /* ── HOLIDAY ── */
+    .list-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; max-height: 240px; overflow-y: auto; }
+    .list-item { display: flex; align-items: center; justify-content: space-between; padding: 9px 13px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; gap: 12px; }
+    .list-item-info { display: flex; flex-direction: column; gap: 2px; }
+    .list-item-name { font-size: 13px; color: var(--text); }
+    .list-item-sub { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-muted); }
+    .list-item-del { background: none; border: none; cursor: pointer; color: var(--text-dim); font-size: 15px; padding: 2px 6px; border-radius: 3px; transition: color 0.15s; }
+    .list-item-del:hover { color: var(--accent3); }
+    .add-row { display: flex; gap: 8px; align-items: flex-end; }
+    .add-row .form-input { flex: 1; }
+    .add-row input[type="date"] { width: 160px; flex: none; }
+
+    /* ── PROJECT DETAIL ── */
+    .project-detail { max-width: 660px; width: 100%; animation: fadeIn 0.3s ease; }
+    .detail-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 22px; gap: 16px; flex-wrap: wrap; }
+    .detail-name { font-family: 'DM Serif Display', serif; font-size: clamp(22px, 3.5vw, 30px); font-weight: 400; color: var(--text); letter-spacing: -0.02em; line-height: 1.1; }
+    .detail-meta { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-muted); margin-top: 5px; line-height: 1.7; }
+    .detail-meta span { color: var(--accent2); }
+    .detail-actions { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 4px; }
+    .detail-action-btn { padding: 6px 11px; background: none; border: 1px solid var(--border-light); border-radius: 5px; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-muted); cursor: pointer; transition: all 0.15s; }
+    .detail-action-btn:hover { border-color: #a78bfa; color: #a78bfa; background: rgba(167,139,250,0.08); }
+    .detail-action-btn.cal-action:hover { border-color: var(--cal); color: var(--cal); background: rgba(52,168,83,0.08); }
+    .progress-bar-wrap { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 11px 15px; margin-bottom: 18px; display: flex; align-items: center; gap: 14px; }
+    .progress-track { flex: 1; height: 3px; background: var(--border-light); border-radius: 2px; overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 2px; transition: width 0.6s ease; }
+    .progress-text { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-muted); white-space: nowrap; }
+    .reminder-banner { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: rgba(245,166,35,0.08); border: 1px solid rgba(245,166,35,0.25); border-radius: 6px; margin-bottom: 14px; }
+    .reminder-banner-icon { font-size: 15px; flex-shrink: 0; }
+    .reminder-banner-text { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--accent4); }
+
+    /* ── TIMELINE ── */
+    .timeline { display: flex; flex-direction: column; position: relative; }
+    .timeline::before { content: ''; position: absolute; left: 25px; top: 18px; bottom: 18px; width: 1px; background: linear-gradient(to bottom, var(--border-light) 80%, transparent); }
+    .test-row { display: flex; align-items: center; padding: 4px 0; animation: rowIn 0.35s ease both; }
+    .node { width: 50px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; z-index: 1; }
+    .node-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--border-light); background: var(--bg); transition: all 0.2s; }
+    .test-row.t-past .node-dot { border-color: var(--text-dim); background: var(--text-dim); }
+    .test-row.t-next .node-dot { border-color: var(--accent2); background: var(--accent2); box-shadow: 0 0 12px rgba(0,212,170,0.5); width: 12px; height: 12px; }
+    .test-row.t-upcoming .node-dot { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 8px rgba(79,124,255,0.4); }
+    .card { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 11px 14px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; transition: transform 0.2s, box-shadow 0.2s; }
+    .card:hover { transform: translateX(3px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+    .test-row.t-past .card { opacity: 0.35; }
+    .test-row.t-next .card { border-color: rgba(0,212,170,0.3); background: rgba(0,212,170,0.04); }
+    .test-row.t-upcoming .card { border-color: var(--border-light); }
+    .card-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 3px; }
+    .test-row.t-next .card-label { color: var(--accent2); }
+    .card-date { font-family: 'DM Serif Display', serif; font-size: 16px; color: var(--text); }
+    .card-time { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--accent); margin-top: 1px; }
+    .card-weekday { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+    .card-postponed { display: inline-flex; align-items: center; gap: 4px; font-family: 'DM Mono', monospace; font-size: 9px; color: var(--accent4); background: rgba(245,166,35,0.1); border: 1px solid rgba(245,166,35,0.2); border-radius: 3px; padding: 2px 6px; margin-top: 4px; }
+    .card-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+    .pill { font-family: 'DM Mono', monospace; font-size: 10px; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+    .pill-past { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+    .pill-next { background: rgba(0,212,170,0.12); color: var(--accent2); border: 1px solid rgba(0,212,170,0.25); }
+    .pill-upcoming { background: var(--accent-glow); color: var(--accent); border: 1px solid rgba(79,124,255,0.2); }
+    .pill-reminder { background: rgba(245,166,35,0.12); color: var(--accent4); border: 1px solid rgba(245,166,35,0.25); }
+    .cal-link-btn { display: inline-flex; align-items: center; gap: 4px; font-family: 'DM Mono', monospace; font-size: 9px; color: var(--cal); background: rgba(52,168,83,0.1); border: 1px solid rgba(52,168,83,0.25); border-radius: 3px; padding: 2px 7px; cursor: pointer; text-decoration: none; transition: background 0.15s; margin-top: 2px; }
+    .cal-link-btn:hover { background: rgba(52,168,83,0.2); }
+
+    /* ── SUMMARY ── */
+    .summary { margin-top: 16px; padding: 12px 15px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: center; gap: 0; flex-wrap: wrap; }
+    .summary-item { display: flex; flex-direction: column; gap: 2px; flex: 1; padding: 0 12px; }
+    .summary-item:first-child { padding-left: 0; }
+    .summary-item:last-child { padding-right: 0; }
+    .summary-item + .summary-item { border-left: 1px solid var(--border); }
+    .summary-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-dim); }
+    .summary-value { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text-muted); }
+
+    /* ── CALENDAR SUBSCRIPTION PANEL ── */
+    .cal-panel-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 14px; }
+    .cal-panel-card h3 { font-family: 'DM Serif Display', serif; font-size: 17px; font-weight: 400; margin-bottom: 6px; color: var(--text); }
+    .cal-panel-card p { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 14px; }
+    .project-checklist { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; max-height: 200px; overflow-y: auto; }
+    .project-check-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: border-color 0.15s; }
+    .project-check-item:hover { border-color: var(--border-light); }
+    .project-check-item.checked { border-color: rgba(52,168,83,0.4); background: rgba(52,168,83,0.05); }
+    .project-check-item input[type="checkbox"] { accent-color: var(--cal); width: 14px; height: 14px; flex-shrink: 0; cursor: pointer; }
+    .project-check-label { font-size: 13px; color: var(--text); flex: 1; }
+    .project-check-sub { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text-dim); }
+    .cal-btn-row { display: flex; gap: 9px; flex-wrap: wrap; }
+    .cal-primary-btn { padding: 11px 18px; background: var(--cal); border: none; border-radius: 6px; color: white; font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.1em; cursor: pointer; transition: opacity 0.2s, transform 0.15s; display: flex; align-items: center; gap: 7px; }
+    .cal-primary-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+    .cal-secondary-btn { padding: 11px 16px; background: var(--surface3); border: 1px solid rgba(52,168,83,0.3); border-radius: 6px; color: var(--cal); font-family: 'DM Mono', monospace; font-size: 11px; cursor: pointer; transition: background 0.15s; display: flex; align-items: center; gap: 7px; }
+    .cal-secondary-btn:hover { background: rgba(52,168,83,0.08); }
+    .subscription-record { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
+    .sub-record-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 5px; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-muted); }
+    .sub-record-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cal); flex-shrink: 0; }
+
+    /* ── TOAST ── */
+    .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--surface3); border: 1px solid var(--border-light); border-radius: 8px; padding: 10px 18px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text); z-index: 999; transition: transform 0.3s ease, opacity 0.3s ease; opacity: 0; white-space: nowrap; }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+    ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 2px; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes rowIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+    @media (max-width: 720px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+      .main { padding: 24px 18px 60px; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-eyebrow">Protocol Tool</div>
+      <div class="sidebar-title">Test <em>Scheduler</em></div>
+      <div class="sync-indicator">
+        <div class="sync-dot connecting" id="syncDot"></div>
+        <span id="syncLabel">Connecting...</span>
+      </div>
+    </div>
+    <div class="section-label">Projects</div>
+    <div class="project-list" id="projectList"></div>
+    <button class="sidebar-btn" id="addProjectBtn">＋ &nbsp;Add New Project</button>
+    <div class="sidebar-divider"></div>
+    <div class="section-label">Settings</div>
+    <button class="sidebar-btn" id="intervalsBtn">⏱ &nbsp;Default Intervals</button>
+    <button class="sidebar-btn holiday-btn" id="holidayBtn">🗓 &nbsp;Manage Holidays</button>
+    <button class="sidebar-btn cal-btn" id="calBtn">📅 &nbsp;Calendar Reminders</button>
+  </aside>
+  <main class="main" id="main">
+    <div class="loading-screen"><div class="spinner"></div><div class="loading-text">Connecting to database...</div></div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  /* ── FIREBASE ── */
+  const app = initializeApp({
+    apiKey: "AIzaSyCy2NuKMau6XMfCDewUcp3MSnfHM9TU43w",
+    authDomain: "test-scheduler-f1f4f.firebaseapp.com",
+    projectId: "test-scheduler-f1f4f",
+    storageBucket: "test-scheduler-f1f4f.firebasestorage.app",
+    messagingSenderId: "234158508821",
+    appId: "1:234158508821:web:4d0bb30290d6a885e6f71c"
+  });
+  const db = getFirestore(app);
+  const COL_PROJECTS   = collection(db, 'projects');
+  const COL_HOLIDAYS   = collection(db, 'holidays');
+  const DOC_INTERVALS  = doc(db, 'settings', 'intervals');
+
+  /* ── TIME UNITS ── */
+  // Units: minutes, hours, days, weeks, months
+  // "large" units (days/weeks/months) → reminder 1 day before
+  // "small" units (hours/minutes)     → reminder 10 min before
+  const UNIT_LABELS = { minutes:'min', hours:'hr', days:'day', weeks:'wk', months:'mo' };
+  const LARGE_UNITS = new Set(['days','weeks','months']);
+
+  function intervalToMs(value, unit) {
+    const v = Number(value);
+    switch(unit) {
+      case 'minutes': return v * 60000;
+      case 'hours':   return v * 3600000;
+      case 'days':    return v * 86400000;
+      case 'weeks':   return v * 7 * 86400000;
+      case 'months':  return null; // handled specially
+    }
+  }
+
+  /* Add interval to a base Date, returns a new Date */
+  function addInterval(baseDate, value, unit) {
+    const d = new Date(baseDate);
+    const v = Number(value);
+    switch(unit) {
+      case 'minutes': d.setMinutes(d.getMinutes() + v); break;
+      case 'hours':   d.setHours(d.getHours() + v); break;
+      case 'days':    d.setDate(d.getDate() + v); break;
+      case 'weeks':   d.setDate(d.getDate() + v * 7); break;
+      case 'months':  d.setMonth(d.getMonth() + v); break;
+    }
+    return d;
+  }
+
+  function intervalLabel(value, unit) {
+    return `${value} ${UNIT_LABELS[unit] || unit}`;
+  }
+
+  /* ── DEFAULTS ── */
+  const DEFAULT_INTERVALS = [
+    { value: 100, unit: 'days', label: 'T+100d' },
+    { value: 201, unit: 'days', label: 'T+201d' },
+    { value: 402, unit: 'days', label: 'T+402d' },
+    { value: 603, unit: 'days', label: 'T+603d' },
+    { value: 804, unit: 'days', label: 'T+804d' },
+  ];
+  const COLORS = ['#4f7cff','#00d4aa','#ff6b6b','#f5a623','#b06af5','#ff9f43','#54a0ff','#e056fd'];
+
+  /* ── STATE ── */
+  let projects        = [];
+  let holidays        = [];
+  let globalIntervals = DEFAULT_INTERVALS.map(i=>({...i}));
+  let activeId        = null;
+  let mode            = 'loading';
+  let newProjIntervals = null;
+  let loadedCount     = 0;
+  let myAuthUser      = parseInt(localStorage.getItem('tds-authuser') || '0');
+
+  /* ── SYNC STATUS ── */
+  function setSyncStatus(s, label) {
+    const dot = document.getElementById('syncDot');
+    const lbl = document.getElementById('syncLabel');
+    if (dot) dot.className = 'sync-dot ' + s;
+    if (lbl) lbl.textContent = label;
+  }
+
+  /* ── DATE / TIME HELPERS ── */
+  function toDateStr(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+  function isWeekend(d) { const day = d.getDay(); return day===0||day===6; }
+  function isHoliday(d) { const ds = toDateStr(d); return holidays.some(h=>h.date===ds); }
+  function isBlocked(d) { return isWeekend(d)||isHoliday(d); }
+  function getHolidayName(d) { const ds=toDateStr(d); const h=holidays.find(h=>h.date===ds); return h?h.name:null; }
+
+  /* Postpone to next workday — only shifts the DATE, preserves time */
+  function nextWorkday(date) {
+    const d = new Date(date);
+    const h = d.getHours(), m = d.getMinutes();
+    while (isBlocked(d)) d.setDate(d.getDate()+1);
+    d.setHours(h, m, 0, 0);
+    return d;
+  }
+
+  function scheduleDate(baseDate, value, unit) {
+    const raw = addInterval(baseDate, value, unit);
+    const adjusted = nextWorkday(raw);
+    const postponed = toDateStr(raw) !== toDateStr(adjusted);
+    const reason = postponed ? (isWeekend(raw) ? (raw.getDay()===6?'Saturday':'Sunday') : getHolidayName(raw)||'Holiday') : null;
+    return { raw, adjusted, postponed, reason };
+  }
+
+  function fmtDate(d)    { return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+  function fmtFull(d)    { return d.toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}); }
+  function fmtWeekday(d) { return d.toLocaleDateString('en-US',{weekday:'long'}); }
+  function fmtTime(d)    { return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true}); }
+  function fmtDateTime(d){ return `${fmtDate(d)} ${fmtTime(d)}`; }
+
+  function isLargeUnit(unit) { return LARGE_UNITS.has(unit); }
+
+  function relative(date) {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const d = new Date(date); d.setHours(0,0,0,0);
+    const diff = Math.round((d-today)/86400000);
+    if (diff<0)   return {label:`${Math.abs(diff)}d ago`, type:'past', diff};
+    if (diff===0) return {label:'Today',    type:'today',    diff};
+    if (diff===1) return {label:'Tomorrow', type:'tomorrow', diff};
+    return {label:`in ${diff}d`, type:'upcoming', diff};
+  }
+
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function getProjectIntervals(p) { return (p.intervals&&p.intervals.length)?p.intervals:globalIntervals; }
+
+  /* ── GOOGLE CALENDAR LINK BUILDER ── */
+  function gcalLink(title, startDate, unit, description='', authuser=0) {
+    // For large units (days/weeks/months): all-day event
+    // For small units (hours/minutes): timed event (1 hour duration)
+    const large = isLargeUnit(unit);
+    let dates;
+    if (large) {
+      const ds = toDateStr(startDate).replace(/-/g,'');
+      dates = `${ds}/${ds}`;
+    } else {
+      const pad = n => String(n).padStart(2,'0');
+      const d = startDate;
+      const start = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+      const end   = new Date(d.getTime() + 3600000);
+      const e = end;
+      const endStr = `${e.getFullYear()}${pad(e.getMonth()+1)}${pad(e.getDate())}T${pad(e.getHours())}${pad(e.getMinutes())}00`;
+      dates = `${start}/${endStr}`;
+    }
+    // Reminder in minutes: large → 1440 (1 day), small → 10
+    const reminder = large ? 1440 : 10;
+    const params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: title,
+      dates,
+      details: description,
+      reminders: `DISPLAY,${reminder}`,
+    });
+    return `https://calendar.google.com/calendar/render?${params}&authuser=${authuser}`;
+  }
+
+  /* Open calendar links for all intervals of given projects */
+  function openCalendarLinks(projectIds, authuser=0) {
+    let count = 0;
+    projectIds.forEach(pid => {
+      const p = projects.find(x=>x.id===pid);
+      if (!p) return;
+      const t0 = buildT0(p);
+      const intervals = getProjectIntervals(p);
+      intervals.forEach(iv => {
+        const { adjusted } = scheduleDate(t0, iv.value, iv.unit);
+        const title = `${p.name} — ${iv.label || intervalLabel(iv.value, iv.unit)}`;
+        const desc = `Scheduled test for project: ${p.name}\nInterval: ${intervalLabel(iv.value, iv.unit)}\nBaseline (T=0): ${fmtDateTime(t0)}`;
+        const url = gcalLink(title, adjusted, iv.unit, desc, authuser);
+        setTimeout(() => window.open(url, '_blank'), count * 400);
+        count++;
+      });
+      // Save snapshot of what was just synced
+      saveSyncSnapshot(pid, buildEventList(p));
+    });
+    return count;
+  }
+
+  /* Build the T0 Date with time included */
+  function buildT0(p) {
+    const dateStr = p.startDate;
+    const timeStr = p.startTime || '09:00';
+    return new Date(`${dateStr}T${timeStr}:00`);
+  }
+
+  /* ── SYNC SNAPSHOT: remember what was last synced (per project, per device) ── */
+  function getSyncSnapshot(projectId) {
+    try { return JSON.parse(localStorage.getItem('tds-snap-' + projectId) || 'null'); } catch { return null; }
+  }
+  function saveSyncSnapshot(projectId, events) {
+    // events: [{key, title, dateStr}]  key = intervalValue_unit
+    localStorage.setItem('tds-snap-' + projectId, JSON.stringify({ events, savedAt: new Date().toISOString() }));
+  }
+  function clearSyncSnapshot(projectId) {
+    localStorage.removeItem('tds-snap-' + projectId);
+  }
+
+  /* Build the current event list for a project */
+  function buildEventList(p) {
+    const t0 = buildT0(p);
+    const intervals = getProjectIntervals(p);
+    return intervals.map(iv => {
+      const { adjusted } = scheduleDate(t0, iv.value, iv.unit);
+      return {
+        key: iv.value + '_' + iv.unit,
+        title: `${p.name} — ${iv.label || intervalLabel(iv.value, iv.unit)}`,
+        dateStr: isLargeUnit(iv.unit) ? toDateStr(adjusted) : adjusted.toISOString()
+      };
+    });
+  }
+
+  /* Compare old snapshot vs current — return stale event titles */
+  function findStaleEvents(projectId) {
+    const snap = getSyncSnapshot(projectId);
+    if (!snap) return [];
+    const p = projects.find(x => x.id === projectId);
+    if (!p) return [];
+    const current = buildEventList(p);
+    const currentMap = new Map(current.map(e => [e.key, e.dateStr]));
+    const stale = [];
+    snap.events.forEach(old => {
+      const newDate = currentMap.get(old.key);
+      if (!newDate) {
+        // interval was removed entirely
+        stale.push({ title: old.title, reason: 'interval removed' });
+      } else if (newDate !== old.dateStr) {
+        // date shifted
+        const oldD = isLargeUnit(old.key.split('_')[1])
+          ? new Date(old.dateStr + 'T00:00:00')
+          : new Date(old.dateStr);
+        const newD = isLargeUnit(old.key.split('_')[1])
+          ? new Date(newDate + 'T00:00:00')
+          : new Date(newDate);
+        stale.push({ title: old.title, reason: `date changed from ${fmtDate(oldD)} to ${fmtDate(newD)}` });
+      }
+    });
+    return stale;
+  }
+
+  /* ── FIRESTORE WRITES ── */
+  async function fsSetProject(p) {
+    setSyncStatus('connecting','Saving...');
+    await setDoc(doc(db,'projects',p.id), p);
+    setSyncStatus('connected','Live sync ✓');
+  }
+  async function fsDeleteProject(id) {
+    setSyncStatus('connecting','Saving...');
+    await deleteDoc(doc(db,'projects',id));
+    setSyncStatus('connected','Live sync ✓');
+  }
+  async function fsSetHoliday(h)     { await setDoc(doc(db,'holidays',h.date), h); }
+  async function fsDeleteHoliday(d)  { await deleteDoc(doc(db,'holidays',d)); }
+  async function fsSetIntervals(arr) { await setDoc(DOC_INTERVALS, {list:arr}); }
+
+  /* ── LIVE LISTENERS ── */
+  function checkAllLoaded() {
+    loadedCount++;
+    if (loadedCount >= 3) {
+      mode = projects.length > 0 ? 'detail' : 'welcome';
+      if (projects.length > 0 && !activeId) activeId = projects[0].id;
+      setSyncStatus('connected','Live sync ✓');
+      renderSidebar(); renderMain();
+    }
+  }
+
+  onSnapshot(COL_PROJECTS, snap => {
+    const first = loadedCount < 3;
+    projects = snap.docs.map(d=>({id:d.id,...d.data()}));
+    projects.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    if (first) checkAllLoaded();
+    else { renderSidebar(); if(mode==='detail') renderMain(); }
+    setSyncStatus('connected','Live sync ✓');
+  }, () => setSyncStatus('error','Connection error'));
+
+  onSnapshot(COL_HOLIDAYS, snap => {
+    const first = loadedCount < 3;
+    holidays = snap.docs.map(d=>d.data());
+    if (first) checkAllLoaded();
+    else if (mode==='holidays'||mode==='detail') renderMain();
+  });
+
+  onSnapshot(DOC_INTERVALS, snap => {
+    const first = loadedCount < 3;
+    if (snap.exists()) globalIntervals = snap.data().list || DEFAULT_INTERVALS;
+    if (first) checkAllLoaded();
+    else if (mode==='intervals') renderMain();
+  });
+
+
+  /* ── TOAST ── */
+  let toastTimer;
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent=msg; t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>t.classList.remove('show'), 3500);
+  }
+
+  /* ── SIDEBAR ── */
+  function renderSidebar() {
+    const list = document.getElementById('projectList');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!projects.length) {
+      list.innerHTML = `<div style="padding:10px 12px;font-size:12px;color:var(--text-dim);font-style:italic;">No projects yet</div>`;
+    } else {
+      projects.forEach((p,i) => {
+        const t0 = buildT0(p);
+        const intervals = getProjectIntervals(p);
+        const done = intervals.filter(iv => {
+          const {adjusted} = scheduleDate(t0, iv.value, iv.unit);
+          return relative(adjusted).type==='past';
+        }).length;
+        const color = COLORS[i%COLORS.length];
+        const item = document.createElement('div');
+        item.className = 'project-item'+(p.id===activeId?' active':'');
+        item.innerHTML = `
+          <div class="project-item-left">
+            <div class="project-dot" style="background:${color}"></div>
+            <div class="project-name-text">${esc(p.name)}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:5px">
+            <span class="project-progress">${done}/${intervals.length}</span>
+            <button class="project-delete" title="Delete">×</button>
+          </div>`;
+        item.addEventListener('click', e=>{ if(!e.target.classList.contains('project-delete')) selectProject(p.id); });
+        item.querySelector('.project-delete').addEventListener('click', e=>{ e.stopPropagation(); deleteProject(p.id); });
+        list.appendChild(item);
+      });
+    }
+  }
+
+  /* ── RENDER MAIN ── */
+  function renderMain() {
+    const main = document.getElementById('main');
+
+    if (mode==='loading') {
+      main.innerHTML = `<div class="loading-screen"><div class="spinner"></div><div class="loading-text">Connecting to database...</div></div>`;
+      return;
+    }
+    if (mode==='welcome') {
+      main.innerHTML = `<div class="welcome"><div class="welcome-icon">◎</div><div class="welcome-title">No project selected</div><div class="welcome-sub">Click "+ Add New Project" to get started</div></div>`;
+      return;
+    }
+
+    /* ── NEW PROJECT ── */
+    if (mode==='new') {
+      if (!newProjIntervals) newProjIntervals = globalIntervals.map(i=>({...i}));
+      const chips = [...newProjIntervals].sort((a,b)=>intervalToMs(a.value,a.unit)||0 - intervalToMs(b.value,b.unit)||0)
+        .map(i=>`<span class="interval-chip">${esc(i.label||intervalLabel(i.value,i.unit))}<button class="chip-del" data-key="${i.value}_${i.unit}">×</button></span>`).join('');
+      main.innerHTML = `
+        <div class="panel">
+          <div class="panel-title">New <em>Project</em></div>
+          <div class="form-group"><label class="form-label">Project Name</label><input class="form-input" type="text" id="projName" placeholder="e.g. Study Alpha — Cohort 1" autocomplete="off"/></div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">T = 0 &nbsp;/&nbsp; Start Date</label><input class="form-input" type="date" id="projDate"/></div>
+            <div class="form-group"><label class="form-label">Test Start Time</label><input class="form-input" type="time" id="projTime" value="09:00"/></div>
+          </div>
+          <div class="intervals-section">
+            <div class="intervals-section-title">Test Intervals <span class="use-default-link" id="useDefaultLink">Reset to defaults</span></div>
+            <div class="interval-chips" id="newChips">${chips||'<span class="empty-list">No intervals — add below</span>'}</div>
+            <div class="interval-add-row">
+              <input type="number" id="newIntVal" placeholder="Value" min="1"/>
+              <select id="newIntUnit">
+                <option value="minutes">Minutes</option>
+                <option value="hours">Hours</option>
+                <option value="days" selected>Days</option>
+                <option value="weeks">Weeks</option>
+                <option value="months">Months</option>
+              </select>
+              <input type="text" id="newIntLabel" placeholder="Label (optional)"/>
+              <button class="small-add-btn" id="addNewIntBtn">+ Add</button>
+            </div>
+          </div>
+          <button class="form-submit" id="createBtn">Create Project →</button>
+        </div>`;
+      document.getElementById('projName').focus();
+      document.getElementById('createBtn').addEventListener('click', createProject);
+      document.getElementById('addNewIntBtn').addEventListener('click', addNewProjInterval);
+      document.getElementById('useDefaultLink').addEventListener('click', ()=>{ newProjIntervals=globalIntervals.map(i=>({...i})); renderMain(); });
+      document.querySelectorAll('.chip-del').forEach(btn => {
+        btn.addEventListener('click', ()=>{
+          const [v,u] = btn.dataset.key.split('_');
+          newProjIntervals = newProjIntervals.filter(i=>!(String(i.value)===v && i.unit===u));
+          renderMain();
+        });
+      });
+      return;
+    }
+
+    /* ── DEFAULT INTERVALS SETTINGS ── */
+    if (mode==='intervals') {
+      const sorted = [...globalIntervals];
+      main.innerHTML = `
+        <div class="panel">
+          <div class="panel-title">Default <em>Intervals</em></div>
+          <p class="panel-sub">These are used for all new projects. You can also set custom intervals per project. Changes sync to everyone instantly.</p>
+          <div class="interval-chips" id="intervalChips">
+            ${sorted.length ? sorted.map(i=>`<span class="interval-chip">${esc(i.label||intervalLabel(i.value,i.unit))}<button class="chip-del" data-key="${i.value}_${i.unit}">×</button></span>`).join('') : '<span class="empty-list">No intervals defined</span>'}
+          </div>
+          <div class="form-label" style="margin-bottom:10px;margin-top:4px;">Add Interval</div>
+          <div class="interval-add-row">
+            <input class="form-input" type="number" id="intVal" placeholder="Value" min="1" style="width:90px;flex:none;padding:10px 11px;"/>
+            <select class="form-input" id="intUnit" style="width:auto;flex:none;">
+              <option value="minutes">Minutes</option>
+              <option value="hours">Hours</option>
+              <option value="days" selected>Days</option>
+              <option value="weeks">Weeks</option>
+              <option value="months">Months</option>
+            </select>
+            <input class="form-input" type="text" id="intLabel" placeholder="Label (optional)" style="flex:1;"/>
+            <button class="add-btn" id="addIntBtn">+ Add</button>
+          </div>
+          <p style="font-size:11px;color:var(--text-dim);font-style:italic;margin-top:12px;">Reminder timing: days/weeks/months → 1 day before &nbsp;·&nbsp; hours/minutes → 10 min before</p>
+          <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+            <button class="add-btn" id="resetDefaultsBtn" style="color:var(--accent3);border-color:rgba(255,107,107,0.3);">↺ Reset to factory defaults</button>
+            <span style="font-size:11px;color:var(--text-dim);margin-left:10px;">T+100, 201, 402, 603, 804 days</span>
+          </div>
+        </div>`;
+      document.querySelectorAll('.chip-del').forEach(btn=>{
+        btn.addEventListener('click', async()=>{
+          const [v,u] = btn.dataset.key.split('_');
+          const updated = globalIntervals.filter(i=>!(String(i.value)===v&&i.unit===u));
+          await fsSetIntervals(updated); showToast('Interval removed');
+        });
+      });
+      document.getElementById('addIntBtn').addEventListener('click', addGlobalInterval);
+      document.getElementById('resetDefaultsBtn').addEventListener('click', async ()=>{
+        if (!confirm('Reset all default intervals to T+100, 201, 402, 603, 804 days? This affects all users.')) return;
+        await fsSetIntervals(DEFAULT_INTERVALS.map(i=>({...i})));
+        showToast('✓ Reset to factory defaults');
+      });
+      return;
+    }
+
+    /* ── HOLIDAY MANAGER ── */
+    if (mode==='holidays') {
+      const thisYear = new Date().getFullYear();
+      const sorted = [...holidays].sort((a,b)=>a.date.localeCompare(b.date));
+
+      // Group by year for display
+      const byYear = {};
+      sorted.forEach(h => {
+        const yr = h.date.slice(0,4);
+        if (!byYear[yr]) byYear[yr] = [];
+        byYear[yr].push(h);
+      });
+
+      main.innerHTML = `
+        <div class="panel">
+          <div class="panel-title">Manage <em>Holidays</em></div>
+          <p class="panel-sub">Tests falling on weekends or these dates will be postponed to the next working day. Changes sync to everyone.</p>
+
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px 18px;margin-bottom:20px;">
+            <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px;">Auto-Import US Public Holidays</div>
+            <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.6;">Fetches official US federal holidays from a public API and adds any that are not already saved. Duplicates are skipped automatically.</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+              <select class="form-input" id="importYear" style="width:110px;flex:none;font-family:'DM Mono',monospace;font-size:13px;">
+                <option value="${thisYear-1}">${thisYear-1}</option>
+                <option value="${thisYear}" selected>${thisYear}</option>
+                <option value="${thisYear+1}">${thisYear+1}</option>
+                <option value="${thisYear+2}">${thisYear+2}</option>
+                <option value="${thisYear+3}">${thisYear+3}</option>
+              </select>
+              <button class="add-btn" id="importOneYearBtn" style="background:var(--accent-glow);border-color:rgba(79,124,255,0.3);color:var(--accent);">⬇ Import Selected Year</button>
+              <button class="add-btn" id="importAllYearsBtn" style="background:rgba(0,212,170,0.06);border-color:rgba(0,212,170,0.2);color:var(--accent2);">⬇ Import ${thisYear} + ${thisYear+1}</button>
+            </div>
+            <div id="importStatus" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);margin-top:8px;min-height:16px;"></div>
+          </div>
+
+          <div class="form-label" style="margin-bottom:9px;">Saved Holidays (${holidays.length})</div>
+          <div class="list-container" style="max-height:300px;">
+            ${sorted.length ? Object.entries(byYear).map(([yr, hs]) => `
+              <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.15em;color:var(--text-dim);padding:4px 2px 2px;text-transform:uppercase;">${yr}</div>
+              ${hs.map(h=>`
+              <div class="list-item">
+                <div class="list-item-info"><div class="list-item-name">${esc(h.name)}</div><div class="list-item-sub">${fmtDate(new Date(h.date+'T00:00:00'))}</div></div>
+                <button class="list-item-del" data-date="${h.date}">×</button>
+              </div>`).join('')}`).join('') : '<div class="empty-list">No holidays added yet. Use auto-import above or add manually below.</div>'}
+          </div>
+
+          <div class="form-label" style="margin-bottom:9px;margin-top:4px;">Add Manually</div>
+          <div class="add-row">
+            <input class="form-input" type="text" id="hName" placeholder="Holiday name" autocomplete="off"/>
+            <input class="form-input" type="date" id="hDate"/>
+            <button class="add-btn" id="addHolidayBtn">Add</button>
+          </div>
+        </div>`;
+
+      document.querySelectorAll('.list-item-del').forEach(btn=>{
+        btn.addEventListener('click', async()=>{ await fsDeleteHoliday(btn.dataset.date); showToast('Holiday removed'); });
+      });
+      document.getElementById('addHolidayBtn').addEventListener('click', addHoliday);
+
+      async function importHolidaysForYear(year) {
+        const statusEl = document.getElementById('importStatus');
+        statusEl.textContent = `Fetching ${year} holidays…`;
+        try {
+          const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/US`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          const existingDates = new Set(holidays.map(h=>h.date));
+          const toAdd = data.filter(h => !existingDates.has(h.date));
+          if (!toAdd.length) {
+            statusEl.textContent = `✓ All ${year} holidays already imported (${data.length} total)`;
+            return 0;
+          }
+          await Promise.all(toAdd.map(h => fsSetHoliday({ name: h.localName || h.name, date: h.date })));
+          return toAdd.length;
+        } catch(e) {
+          statusEl.textContent = `⚠ Could not fetch holidays — check your connection`;
+          console.error(e);
+          return -1;
+        }
+      }
+
+      document.getElementById('importOneYearBtn').addEventListener('click', async () => {
+        const year = parseInt(document.getElementById('importYear').value);
+        const btn = document.getElementById('importOneYearBtn');
+        btn.disabled = true; btn.textContent = 'Importing…';
+        const added = await importHolidaysForYear(year);
+        if (added >= 0) {
+          document.getElementById('importStatus').textContent = added > 0
+            ? `✓ Added ${added} new ${year} US holidays — synced to all users`
+            : `✓ ${year} already up to date`;
+          showToast(added > 0 ? `✓ ${added} holidays added for ${year}` : `${year} holidays already imported`);
+        }
+        btn.disabled = false; btn.textContent = '⬇ Import Selected Year';
+      });
+
+      document.getElementById('importAllYearsBtn').addEventListener('click', async () => {
+        const btn = document.getElementById('importAllYearsBtn');
+        const statusEl = document.getElementById('importStatus');
+        btn.disabled = true; btn.textContent = 'Importing…';
+        const y1 = thisYear, y2 = thisYear + 1;
+        statusEl.textContent = `Fetching ${y1} holidays…`;
+        const a1 = await importHolidaysForYear(y1);
+        statusEl.textContent = `Fetching ${y2} holidays…`;
+        const a2 = await importHolidaysForYear(y2);
+        const total = (a1 > 0 ? a1 : 0) + (a2 > 0 ? a2 : 0);
+        statusEl.textContent = total > 0
+          ? `✓ Added ${total} new holidays across ${y1}–${y2} — synced to all users`
+          : `✓ ${y1}–${y2} already up to date`;
+        showToast(total > 0 ? `✓ ${total} US holidays imported` : 'All holidays already up to date');
+        btn.disabled = false; btn.textContent = `⬇ Import ${y1} + ${y2}`;
+      });
+
+      return;
+    }
+
+    /* ── CALENDAR SUBSCRIPTION PANEL ── */
+    if (mode==='calendar') {
+      const accountOptions = [
+        '<option value="0"'+(myAuthUser===0?' selected':'')+'>Account 1 (Primary)</option>',
+        '<option value="1"'+(myAuthUser===1?' selected':'')+'>Account 2</option>',
+        '<option value="2"'+(myAuthUser===2?' selected':'')+'>Account 3</option>',
+        '<option value="3"'+(myAuthUser===3?' selected':'')+'>Account 4</option>',
+      ].join('');
+
+      main.innerHTML = `
+        <div class="panel">
+          <div class="panel-title">📅 Calendar <em>Reminders</em></div>
+          <p class="panel-sub">Add your test dates to Google Calendar. Each date becomes a calendar event with an automatic reminder — 1 day before for day/week/month intervals, 10 minutes before for hour/minute intervals.</p>
+
+          <div class="cal-panel-card">
+            <h3>Google Account</h3>
+            <p>If you are signed into multiple Google accounts in this browser, select which one should receive the calendar events.</p>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <select class="form-input" id="calAuthUser" style="width:200px;font-family:'DM Mono',monospace;font-size:13px;">${accountOptions}</select>
+              <span style="font-size:12px;color:var(--text-dim);">Account 1 = your primary Google account</span>
+            </div>
+          </div>
+
+          <div class="cal-panel-card">
+            <h3>Choose Projects</h3>
+            <p>Select which projects to add. Each test date will open as a separate Google Calendar tab — click Save in each one.</p>
+            <div class="project-checklist" id="projectChecklist">
+              ${projects.length ? projects.map(p=>{
+                const intervals = getProjectIntervals(p);
+                return `<label class="project-check-item" data-pid="${p.id}">
+                  <input type="checkbox" value="${p.id}" checked/>
+                  <div style="flex:1;">
+                    <div class="project-check-label">${esc(p.name)}</div>
+                    <div class="project-check-sub">${intervals.length} test${intervals.length!==1?'s':''} &nbsp;·&nbsp; T=0: ${fmtDate(new Date(p.startDate+'T00:00:00'))}</div>
+                  </div>
+                </label>`;
+              }).join('') : '<div class="empty-list">No projects yet</div>'}
+            </div>
+            <div class="cal-btn-row">
+              <button class="cal-primary-btn" id="addToCalBtn">📅 Add to My Calendar</button>
+              <button class="cal-secondary-btn" id="resyncCalBtn">↺ Resync</button>
+            </div>
+          </div>
+          <div id="staleWarning" style="display:none;"></div>
+        </div>`;
+
+      document.querySelectorAll('#projectChecklist input[type="checkbox"]').forEach(cb=>{
+        cb.addEventListener('change', ()=>{
+          cb.closest('.project-check-item').classList.toggle('checked', cb.checked);
+        });
+        // init checked state
+        cb.closest('.project-check-item').classList.toggle('checked', cb.checked);
+      });
+
+      function getSelectedAndSlot() {
+        const selected = [...document.querySelectorAll('#projectChecklist input[type="checkbox"]:checked')].map(cb=>cb.value);
+        const slot = parseInt(document.getElementById('calAuthUser').value||'0');
+        myAuthUser = slot; localStorage.setItem('tds-authuser', String(slot));
+        return { selected, slot };
+      }
+
+      document.getElementById('addToCalBtn').addEventListener('click', ()=>{
+        const { selected, slot } = getSelectedAndSlot();
+        if (!selected.length) { showToast('Select at least one project'); return; }
+        const count = openCalendarLinks(selected, slot);
+        showToast(`📅 Opening ${count} event${count!==1?'s':''}… click Save in each tab`);
+      });
+
+      document.getElementById('resyncCalBtn').addEventListener('click', ()=>{
+        const { selected, slot } = getSelectedAndSlot();
+        if (!selected.length) { showToast('Select at least one project'); return; }
+
+        // Collect stale events across all selected projects
+        const staleAll = [];
+        selected.forEach(pid => {
+          const stale = findStaleEvents(pid);
+          staleAll.push(...stale);
+        });
+
+        // Open new calendar links (also saves fresh snapshot)
+        const count = openCalendarLinks(selected, slot);
+        showToast(`↺ Resyncing ${count} event${count!==1?'s':''}… click Save in each tab`);
+
+        // Show stale event warning after a short delay
+        if (staleAll.length > 0) {
+          setTimeout(() => {
+            const staleDiv = document.getElementById('staleWarning');
+            if (!staleDiv) return;
+            staleDiv.innerHTML = `
+              <div style="background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.3);border-radius:8px;padding:16px 18px;margin-top:16px;">
+                <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent4);margin-bottom:10px;">⚠ Remove these outdated events from Google Calendar</div>
+                <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.6;">These events have changed. Search for them in Google Calendar and delete them manually:</p>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  ${staleAll.map(e => `
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:5px;gap:12px;">
+                      <div>
+                        <div style="font-size:13px;color:var(--text);">${esc(e.title)}</div>
+                        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);margin-top:2px;">${esc(e.reason)}</div>
+                      </div>
+                      <button onclick="navigator.clipboard.writeText('${e.title.replace(/'/g,"\\'")}').then(()=>this.textContent='✓ Copied').catch(()=>{})" style="padding:4px 10px;background:none;border:1px solid var(--border-light);border-radius:4px;color:var(--text-muted);font-family:'DM Mono',monospace;font-size:9px;cursor:pointer;white-space:nowrap;">Copy name</button>
+                    </div>`).join('')}
+                </div>
+                <button id="dismissStaleBtn" style="margin-top:12px;padding:6px 14px;background:none;border:1px solid var(--border-light);border-radius:5px;color:var(--text-dim);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;">Dismiss</button>
+              </div>`;
+            staleDiv.style.display = 'block';
+            document.getElementById('dismissStaleBtn')?.addEventListener('click', ()=>{
+              staleDiv.innerHTML = ''; staleDiv.style.display = 'none';
+            });
+          }, 600);
+        }
+      });
+
+      return;
+    }
+
+    /* ── PROJECT DETAIL ── */
+    if (mode==='detail') {
+      const p = projects.find(x=>x.id===activeId);
+      if (!p) { mode='welcome'; renderMain(); return; }
+      const t0 = buildT0(p);
+      const intervals = getProjectIntervals(p);
+      const usingGlobal = !p.intervals||!p.intervals.length;
+      const results = [...intervals].map(iv=>{
+        const {raw,adjusted,postponed,reason} = scheduleDate(t0, iv.value, iv.unit);
+        const rel = relative(adjusted);
+        return {iv, raw, adjusted, postponed, reason, rel};
+      });
+      let marked=false;
+      results.forEach(r=>{ if(!marked&&r.rel.type!=='past'){r.rel.type='next';marked=true;} });
+      const done = results.filter(r=>r.rel.type==='past').length;
+      const pct  = Math.round((done/results.length)*100);
+      const color = COLORS[projects.indexOf(p)%COLORS.length];
+      const reminders = results.filter(r=>r.rel.type!=='past'&&relative(new Date(r.adjusted.getTime()-86400000)).diff===0);
+      const lastResult = results[results.length-1];
+
+      main.innerHTML = `
+        <div class="project-detail">
+          <div class="detail-header">
+            <div>
+              <div class="detail-name">${esc(p.name)}</div>
+              <div class="detail-meta">
+                T=0: <span>${fmtFull(t0)}</span> at <span>${fmtTime(t0)}</span><br/>
+                ${results.length} tests &nbsp;·&nbsp; ${usingGlobal?'global intervals':'custom intervals'}
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:7px">
+              <div style="width:9px;height:9px;border-radius:50%;background:${color};box-shadow:0 0 10px ${color}99"></div>
+              <div class="detail-actions">
+                <button class="detail-action-btn" id="editStartBtn">✏ Edit Start</button>
+                <button class="detail-action-btn" id="editIntervalsBtn">⏱ Intervals</button>
+                <button class="detail-action-btn cal-action" id="addThisToCalBtn">📅 Add to Calendar</button>
+              </div>
+            </div>
+          </div>
+          <div class="progress-bar-wrap">
+            <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+            <div class="progress-text">${done} / ${results.length} complete</div>
+          </div>
+          ${reminders.map(r=>`<div class="reminder-banner"><span class="reminder-banner-icon">🔔</span><span class="reminder-banner-text">Reminder: test is <strong>tomorrow</strong> — ${fmtDateTime(r.adjusted)}</span></div>`).join('')}
+          <div class="timeline" id="tl"></div>
+          <div class="summary">
+            <div class="summary-item"><span class="summary-label">Completed</span><span class="summary-value">${done}</span></div>
+            <div class="summary-item"><span class="summary-label">Remaining</span><span class="summary-value">${results.length-done}</span></div>
+            <div class="summary-item"><span class="summary-label">Postponed</span><span class="summary-value">${results.filter(r=>r.postponed).length}</span></div>
+            <div class="summary-item"><span class="summary-label">Study End</span><span class="summary-value">${lastResult?fmtDate(lastResult.adjusted):'—'}</span></div>
+          </div>
+        </div>`;
+
+      document.getElementById('editStartBtn').addEventListener('click',()=>{ mode='editStart'; renderMain(); });
+      document.getElementById('editIntervalsBtn').addEventListener('click',()=>{ mode='editProjectIntervals'; renderMain(); });
+      document.getElementById('addThisToCalBtn').addEventListener('click',()=>{
+        const count = openCalendarLinks([p.id], myAuthUser);
+        showToast(`📅 Opening ${count} calendar event${count!==1?'s':''}…`);
+      });
+
+      const tl = document.getElementById('tl');
+      results.forEach((r,idx)=>{
+        const t=r.rel.type;
+        const pillClass = t==='past'?'pill-past':t==='next'?'pill-next':'pill-upcoming';
+        const reminderToday = isLargeUnit(r.iv.unit)
+          ? relative(new Date(r.adjusted.getTime()-86400000)).diff===0 && t!=='past'
+          : Math.round((r.adjusted-new Date())/60000)<=10 && Math.round((r.adjusted-new Date())/60000)>=0;
+        const timeStr = isLargeUnit(r.iv.unit) ? '' : `<div class="card-time">🕐 ${fmtTime(r.adjusted)}</div>`;
+        const calUrl = gcalLink(
+          `${p.name} — ${r.iv.label||intervalLabel(r.iv.value,r.iv.unit)}`,
+          r.adjusted, r.iv.unit,
+          `Project: ${p.name}\nInterval: ${intervalLabel(r.iv.value,r.iv.unit)}`, myAuthUser
+        );
+        const row = document.createElement('div');
+        row.className = `test-row t-${t}`;
+        row.style.animationDelay = Math.min(idx*0.05+0.05,0.5)+'s';
+        row.innerHTML = `
+          <div class="node"><div class="node-dot"></div></div>
+          <div class="card">
+            <div>
+              <div class="card-label">${esc(r.iv.label||intervalLabel(r.iv.value,r.iv.unit))}${t==='next'?' &nbsp;·&nbsp; Next Test':''}</div>
+              <div class="card-date">${fmtDate(r.adjusted)}</div>
+              ${timeStr}
+              <div class="card-weekday">${fmtWeekday(r.adjusted)}</div>
+              ${r.postponed?`<div class="card-postponed">↷ Postponed from ${fmtDate(r.raw)} (${esc(r.reason)})</div>`:''}
+              ${t!=='past'?`<a class="cal-link-btn" href="${calUrl}" target="_blank">📅 Add to Calendar</a>`:''}
+            </div>
+            <div class="card-right">
+              <span class="pill ${pillClass}">${r.rel.label}</span>
+              ${reminderToday?`<span class="pill pill-reminder">🔔 ${isLargeUnit(r.iv.unit)?'Tomorrow':'Soon'}</span>`:''}
+            </div>
+          </div>`;
+        tl.appendChild(row);
+      });
+      return;
+    }
+
+    /* ── EDIT START DATE / TIME ── */
+    if (mode==='editStart') {
+      const p = projects.find(x=>x.id===activeId);
+      if (!p) { mode='welcome'; renderMain(); return; }
+      main.innerHTML = `
+        <div class="panel">
+          <div class="panel-title" style="margin-bottom:6px;">Edit Start — <em>${esc(p.name)}</em></div>
+          <p class="panel-sub">Update the T=0 baseline date and time. All test dates will recalculate instantly for everyone.</p>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">T = 0 &nbsp;/&nbsp; Start Date</label>
+              <input class="form-input" type="date" id="editDate" value="${p.startDate}"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Test Start Time</label>
+              <input class="form-input" type="time" id="editTime" value="${p.startTime||'09:00'}"/>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:8px;">
+            <button class="form-submit" id="saveStartBtn" style="flex:1;">Save Changes →</button>
+            <button class="add-btn" id="cancelEditStartBtn" style="flex:none;">Cancel</button>
+          </div>
+        </div>`;
+      document.getElementById('cancelEditStartBtn').addEventListener('click', ()=>{ mode='detail'; renderMain(); });
+      document.getElementById('saveStartBtn').addEventListener('click', async ()=>{
+        const dateEl = document.getElementById('editDate');
+        const timeEl = document.getElementById('editTime');
+        const date = dateEl.value, time = timeEl.value||'09:00';
+        if (!date) { flash(dateEl); return; }
+        const btn = document.getElementById('saveStartBtn');
+        btn.disabled=true; btn.textContent='Saving…';
+        await fsSetProject({...p, startDate:date, startTime:time});
+        mode='detail'; renderMain();
+        showToast('✓ Start date updated — all test dates recalculated');
+      });
+      return;
+    }
+
+    /* ── EDIT PROJECT INTERVALS ── */
+    if (mode==='editProjectIntervals') {
+      const p = projects.find(x=>x.id===activeId);
+      if (!p) { mode='welcome'; renderMain(); return; }
+      const intervals = getProjectIntervals(p);
+      main.innerHTML = `
+        <div class="panel">
+          <div class="panel-title" style="margin-bottom:6px;">Edit Intervals — <em>${esc(p.name)}</em></div>
+          <p class="panel-sub">Customize test intervals for this project. Changes sync instantly to all users.</p>
+          <div class="interval-chips" id="projIntChips">
+            ${intervals.length ? intervals.map(i=>`<span class="interval-chip">${esc(i.label||intervalLabel(i.value,i.unit))}<button class="chip-del" data-key="${i.value}_${i.unit}">×</button></span>`).join('') : '<span class="empty-list">No intervals</span>'}
+          </div>
+          <div class="form-label" style="margin-bottom:9px;margin-top:4px;">Add Interval</div>
+          <div class="interval-add-row">
+            <input class="form-input" type="number" id="piVal" placeholder="Value" min="1" style="width:90px;flex:none;padding:10px 11px;"/>
+            <select class="form-input" id="piUnit" style="width:auto;flex:none;">
+              <option value="minutes">Minutes</option>
+              <option value="hours">Hours</option>
+              <option value="days" selected>Days</option>
+              <option value="weeks">Weeks</option>
+              <option value="months">Months</option>
+            </select>
+            <input class="form-input" type="text" id="piLabel" placeholder="Label (optional)" style="flex:1;"/>
+            <button class="add-btn" id="addPiBtn">+ Add</button>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap;">
+            <button class="add-btn" id="resetToGlobalBtn" style="color:var(--text-muted);">↺ Reset to defaults</button>
+            <button class="form-submit" id="backBtn" style="width:auto;padding:10px 20px;">← Back</button>
+          </div>
+        </div>`;
+
+      document.querySelectorAll('.chip-del').forEach(btn=>{
+        btn.addEventListener('click', async()=>{
+          const [v,u] = btn.dataset.key.split('_');
+          const updated = getProjectIntervals(p).filter(i=>!(String(i.value)===v&&i.unit===u));
+          await fsSetProject({...p, intervals:updated}); showToast('Interval removed');
+        });
+      });
+      document.getElementById('addPiBtn').addEventListener('click', async()=>{
+        const val = parseInt(document.getElementById('piVal').value);
+        const unit = document.getElementById('piUnit').value;
+        const label = (document.getElementById('piLabel').value||'').trim() || intervalLabel(val,unit);
+        if (!val||val<1) { flash(document.getElementById('piVal')); return; }
+        const cur = getProjectIntervals(p);
+        if (cur.some(i=>i.value===val&&i.unit===unit)) { showToast('That interval already exists'); return; }
+        await fsSetProject({...p, intervals:[...cur,{value:val,unit,label}]}); showToast(`✓ ${label} added`);
+      });
+      document.getElementById('resetToGlobalBtn').addEventListener('click', async()=>{ await fsSetProject({...p,intervals:[]}); showToast('Reset to defaults'); });
+      document.getElementById('backBtn').addEventListener('click', ()=>{ mode='detail'; renderMain(); });
+    }
+  }
+
+  /* ── ACTIONS ── */
+  function selectProject(id) { activeId=id; mode='detail'; renderSidebar(); renderMain(); }
+  function showNewForm()     { newProjIntervals=null; activeId=null; mode='new'; renderSidebar(); renderMain(); }
+  function showIntervals()   { mode='intervals'; renderSidebar(); renderMain(); }
+  function showHolidays()    { mode='holidays';  renderSidebar(); renderMain(); }
+  function showCalendar()    { mode='calendar';  renderSidebar(); renderMain(); }
+
+  function addNewProjInterval() {
+    const val  = parseInt(document.getElementById('newIntVal')?.value||0);
+    const unit = document.getElementById('newIntUnit')?.value||'days';
+    const label= (document.getElementById('newIntLabel')?.value||'').trim()||intervalLabel(val,unit);
+    if (!val||val<1) { flash(document.getElementById('newIntVal')); return; }
+    if (newProjIntervals.some(i=>i.value===val&&i.unit===unit)) { showToast('That interval already exists'); return; }
+    const savedName = document.getElementById('projName')?.value||'';
+    const savedDate = document.getElementById('projDate')?.value||'';
+    const savedTime = document.getElementById('projTime')?.value||'09:00';
+    newProjIntervals = [...newProjIntervals,{value:val,unit,label}];
+    renderMain();
+    if(document.getElementById('projName')) document.getElementById('projName').value=savedName;
+    if(document.getElementById('projDate')) document.getElementById('projDate').value=savedDate;
+    if(document.getElementById('projTime')) document.getElementById('projTime').value=savedTime;
+    showToast(`${label} added`);
+  }
+
+  async function addGlobalInterval() {
+    const val  = parseInt(document.getElementById('intVal')?.value||0);
+    const unit = document.getElementById('intUnit')?.value||'days';
+    const label= (document.getElementById('intLabel')?.value||'').trim()||intervalLabel(val,unit);
+    if (!val||val<1) { flash(document.getElementById('intVal')); return; }
+    if (globalIntervals.some(i=>i.value===val&&i.unit===unit)) { showToast('That interval already exists'); return; }
+    await fsSetIntervals([...globalIntervals,{value:val,unit,label}]);
+    showToast(`✓ ${label} added to defaults`);
+  }
+
+  async function createProject() {
+    const nameEl = document.getElementById('projName');
+    const dateEl = document.getElementById('projDate');
+    const timeEl = document.getElementById('projTime');
+    const name = (nameEl?.value||'').trim();
+    const date = dateEl?.value||'';
+    const time = timeEl?.value||'09:00';
+    if (!name) { flash(nameEl); return; }
+    if (!date) { flash(dateEl); return; }
+    if (!newProjIntervals||!newProjIntervals.length) { showToast('Add at least one test interval'); return; }
+    const btn = document.getElementById('createBtn');
+    if (btn) { btn.disabled=true; btn.textContent='Saving...'; }
+    const usesGlobal = JSON.stringify(newProjIntervals) === JSON.stringify(globalIntervals);
+    const p = { id:Date.now().toString(), name, startDate:date, startTime:time, intervals:usesGlobal?[]:newProjIntervals, createdAt:new Date().toISOString() };
+    await fsSetProject(p);
+    newProjIntervals=null;
+    selectProject(p.id);
+    showToast(`✓ Project "${name}" created — synced to all users`);
+  }
+
+  async function deleteProject(id) {
+    const p = projects.find(x=>x.id===id);
+    if (!p) return;
+    const intervals = getProjectIntervals(p);
+    const eventNames = intervals.map(iv => `${p.name} — ${iv.label||intervalLabel(iv.value,iv.unit)}`);
+    const calList = eventNames.map(n=>`  • ${n}`).join('\n');
+    const msg = `Delete "${p.name}"? This will remove it for everyone.\n\n` +
+      `If you added these events to Google Calendar, search for and delete them manually:\n${calList}`;
+    if (!confirm(msg)) return;
+    if (activeId===id) { activeId=null; mode='welcome'; }
+    await fsDeleteProject(id);
+    renderSidebar(); renderMain();
+    showToast('Project deleted');
+  }
+
+  async function addHoliday() {
+    const nameEl=document.getElementById('hName'), dateEl=document.getElementById('hDate');
+    const name=(nameEl?.value||'').trim(), date=dateEl?.value||'';
+    if (!name){flash(nameEl);return;} if(!date){flash(dateEl);return;}
+    if (holidays.some(h=>h.date===date)){showToast('That date is already added');return;}
+    await fsSetHoliday({name,date}); nameEl.value=''; dateEl.value='';
+    showToast(`✓ "${name}" added — synced to all users`);
+  }
+
+  function flash(el) {
+    if (!el) return;
+    el.style.borderColor='var(--accent3)'; el.style.boxShadow='0 0 0 3px rgba(255,107,107,0.2)'; el.focus();
+    setTimeout(()=>{ el.style.borderColor=''; el.style.boxShadow=''; },1500);
+  }
+
+  /* ── INIT ── */
+  document.getElementById('addProjectBtn').addEventListener('click', showNewForm);
+  document.getElementById('intervalsBtn').addEventListener('click', showIntervals);
+  document.getElementById('holidayBtn').addEventListener('click', showHolidays);
+  document.getElementById('calBtn').addEventListener('click', showCalendar);
+</script>
+</body>
+</html>
